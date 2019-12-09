@@ -3,6 +3,7 @@ import re
 import collections
 import math
 import heapq
+import itertools
 
 
 class LoadValues:
@@ -119,14 +120,14 @@ class Program:
         else:
             self.ip += 3
 
-    def opcode_4_output(self,c):
+    def opcode_4_output(self, c):
         reg1 = self.instructions[self.ip + 1]
-        self.output.append(self.get_param(reg1,c))
+        self.output.append(self.get_param(reg1, c))
         self.ip += 2
 
     def opcode_3_stor_input(self):
         reg1 = self.instructions[self.ip + 1]
-        reg2 = self.input[0]
+        reg2 = self.input.pop(0)
         self.instructions[reg1] = reg2
         self.ip += 2
 
@@ -145,19 +146,34 @@ class Program:
             self.evaluate_instruction()
 
 
+def run_amplifier_stage(phase, input, program):
+    init_prog = program.copy()
+    my_prog = Program(init_prog)
+    my_prog.input = [phase, input]
+    my_prog.evaluate()
+    return my_prog.output[0]
+
+
+def run_full_amplification(phase_list, program):
+    buf = 0
+    for phase in phase_list:
+        buf = run_amplifier_stage(phase, buf, program)
+    return buf
+
+
 if __name__ == '__main__':
-    value_loader = LoadValues()
+    value_loader = LoadValues("input")
     values = value_loader.comma_list_to_intlist()
     int_val = [int(val) for val in values]
     print(int_val)
-    init_prog = int_val.copy()
-    my_prog = Program(init_prog)
-    my_prog.input = [1]
-    my_prog.evaluate()
-    print(my_prog.output)
 
-    init_prog = int_val.copy()
-    my_prog = Program(init_prog)
-    my_prog.input = [5]
-    my_prog.evaluate()
-    print(my_prog.output)
+    max_output = -1
+    best_phase_list = None
+    for phase_list in itertools.permutations([0, 1, 2, 3, 4], 5):
+        output = run_full_amplification(phase_list, int_val)
+        print(phase_list, output)
+        if output > max_output:
+            max_output = output
+            best_phase_list = phase_list
+
+    print("Best : ", best_phase_list, max_output)
