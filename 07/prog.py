@@ -49,6 +49,12 @@ class Program:
         (d, a) = divmod(d, 10)
         return (opcode, a, b, c)
 
+    def output_value(self, val):
+        self.output.append(val)
+
+    def get_input_value(self):
+        return self.input.pop(0)
+
     def get_param(self, value, param_mode):
         if param_mode == 0:  # Position mode
             return self.instructions[value]
@@ -63,6 +69,7 @@ class Program:
         self.instructions = instructions.copy()
         self.ip = 0
         self.output = []
+        self.input = []
 
     def evaluate_instruction(self):
         if (self.instructions[self.ip] == 99) or self.ip > len(self.instructions):
@@ -122,12 +129,13 @@ class Program:
 
     def opcode_4_output(self, c):
         reg1 = self.instructions[self.ip + 1]
-        self.output.append(self.get_param(reg1, c))
+        val = self.get_param(reg1, c)
+        self.output_value(val)
         self.ip += 2
 
     def opcode_3_stor_input(self):
         reg1 = self.instructions[self.ip + 1]
-        reg2 = self.input.pop(0)
+        reg2 = self.get_input_value()
         self.instructions[reg1] = reg2
         self.ip += 2
 
@@ -144,15 +152,26 @@ class Program:
     def evaluate(self):
         while (not self.stop):
             self.evaluate_instruction()
+        return
 
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        while (not self.stop):
+            self.evaluate_instruction()
+            if len(self.output) >0:
+                return self.output.pop(0)
+        raise StopIteration
 
 def run_amplifier_stage(phase, input, program):
     init_prog = program.copy()
     my_prog = Program(init_prog)
     my_prog.input = [phase, input]
-    my_prog.evaluate()
-    return my_prog.output[0]
-
+    my_prog_iter = my_prog.__iter__()
+    val = my_prog_iter.__next__()
+    my_prog_iter = None
+    return val
 
 def run_full_amplification(phase_list, program):
     buf = 0
@@ -160,6 +179,22 @@ def run_full_amplification(phase_list, program):
         buf = run_amplifier_stage(phase, buf, program)
     return buf
 
+def phase2_amplification(phase_list, program):
+    stage_list = []
+    for i in range(5):
+        stage = Program(program.copy())
+        stage.input.append(phase_list[i])
+        stage_list.append(stage.__iter__())
+    stage_list[0].input.append(0)
+    i = 0
+    while True:
+        try:
+            val = stage_list[i].__next__()
+            i = (i + 1) % 5
+            print("Stage: ", i, " ", val)
+            stage_list[i].input.append(val)
+        except StopIteration:
+            return val
 
 if __name__ == '__main__':
     value_loader = LoadValues("input")
@@ -171,9 +206,18 @@ if __name__ == '__main__':
     best_phase_list = None
     for phase_list in itertools.permutations([0, 1, 2, 3, 4], 5):
         output = run_full_amplification(phase_list, int_val)
-        print(phase_list, output)
         if output > max_output:
             max_output = output
             best_phase_list = phase_list
 
     print("Best : ", best_phase_list, max_output)
+
+    max_output = -1
+    best_phase_list = None
+    for phase_list in itertools.permutations([5,6,7,8,9], 5):
+        output = phase2_amplification(phase_list, int_val)
+        if output > max_output:
+            max_output = output
+            best_phase_list = phase_list
+    print("Best Phase 2: ", best_phase_list, max_output)
+
