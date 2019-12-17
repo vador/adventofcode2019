@@ -34,6 +34,15 @@ class LoadValues:
         self.processed_values = raw[0].split(",")
         return self.processed_values
 
+class Logger:
+    min_log_level = 0
+
+    def __init__(self):
+        self.min_log_level = 0
+
+    def log(self, object_from, log_string, log_level=1):
+        if log_level >= self.min_log_level:
+            print(log_string)
 
 class Memory:
     PAGESIZE = 1024
@@ -41,6 +50,10 @@ class Memory:
 
     def __init__(self):
         self.memory_map = {}
+
+    def _dump(self):
+        res_str = " ".join(map(str, self.memory_map[0]))
+        return res_str
 
     def set_instruction(self, program):
         page = self.get_page(0)
@@ -90,11 +103,14 @@ class Memory:
 
 
 class Program:
+    object = "Program"
     memory = None
     ip = 0
+    relative_base = 0
     stop = False
     input = None
     output = None
+    logger = None
 
     def parse_paramopcode(self, paramopcode):
         (raw_param, opcode) = divmod(paramopcode, 100)
@@ -112,8 +128,12 @@ class Program:
     def get_param(self, value, param_mode):
         if param_mode == 0:  # Position mode
             return self.memory.get_mem(value)
-        else:  # Immediate Mode
+        elif param_mode == 1:
             return value
+        elif param_mode == 2:  # Immediate Mode
+            return self.memory.get_mem(self.relative_base+value)
+        else:
+            raise NotImplementedError
 
     def __str__(self):
         result = "ip: {}[{}]-{}".format(self.ip, self.memory.get_mem(self.ip), self.memory)
@@ -123,8 +143,10 @@ class Program:
         self.memory = Memory()
         self.memory.set_instruction(instructions)
         self.ip = 0
+        self.relative_base = 0
         self.output = []
         self.input = []
+        self.logger = Logger()
 
     def evaluate_instruction(self):
         if self.memory.get_mem(self.ip) == 99:
@@ -134,11 +156,11 @@ class Program:
             (opcode, a, b, c) = self.parse_paramopcode(paramopcode)
 
             if opcode == 1:
-                self.opcode_1_add(b, c)
+                self.opcode_1_add(a, b, c)
             elif opcode == 2:
-                self.opcode_2_mult(b, c)
+                self.opcode_2_mult(a, b, c)
             elif opcode == 3:
-                self.opcode_3_stor_input()
+                self.opcode_3_stor_input(c)
             elif opcode == 4:
                 self.opcode_4_output(c)
             elif opcode == 5:
@@ -146,62 +168,133 @@ class Program:
             elif opcode == 6:
                 self.opcode_6_jfalse(b, c)
             elif opcode == 7:
-                self.opcode_7_lt(b, c)
+                self.opcode_7_lt(a, b, c)
             elif opcode == 8:
-                self.opcode_8_eq(b, c)
+                self.opcode_8_eq(a, b, c)
+            elif opcode == 9:
+                self.opcode_9_move_rel_base(c)
             else:
                 self.stop = True
+    def log_str_3_args(self, oper, reg1, reg2, reg3, a, b, c, val1, val2, val3, new_val):
+        log_str = "IP{}\t- {} {}({}) {}({}) {}({}):\t{} {} \t{}->{}".format(self.ip, oper, reg1, c, reg2, b, reg3, a,
+                                                          val1, val2, val3, new_val)
+        log_str += "\n" + self.memory._dump()
+        return log_str
 
-    def opcode_8_eq(self, b, c):
+    def log_str_2_args(self, oper, reg1, reg2, b, c, val1, val2, new_val):
+        log_str = "IP{}\t- {} {}({}) {}({}):\t{}\t{}->{}".format(self.ip, oper, reg1, c, reg2, b,
+                                                          val1, val2,  new_val)
+        log_str += "\n" + self.memory._dump()
+        return log_str
+
+    def log_str_1_args(self, oper, reg1, c, val1, new_val):
+        log_str = "IP{}\t- {} {}({}) :\t{}->{}".format(self.ip, oper, reg1, c,
+                                                          val1,  new_val)
+        log_str += "\n" + self.memory._dump()
+        return log_str
+
+    def opcode_9_move_rel_base(self, c):
+        reg1 = self.memory.get_mem(self.ip + 1)
+        #val = reg1
+        val = self.get_param(reg1, c)
+        prev_rel_base = self.relative_base
+        self.relative_base += val
+        log_str = self.log_str_1_args("MOVR", reg1, c, val, self.relative_base)
+        self.logger.log(self.object, log_str)
+        self.ip += 2
+
+    def opcode_8_eq(self, a, b, c):
         (reg1, reg2, reg3) = self.memory.get_mult_mem(self.ip + 1, 3)
-        if self.get_param(reg1, c) == self.get_param(reg2, b):
-            self.memory.set_mem(reg3, 1)
+        val1 = self.get_param(reg1, c)
+        val2 = self.get_param(reg2, b)
+        if val1 == val2:
+            val = 1
         else:
-            self.memory.set_mem(reg3, 0)
+            val = 0
+        val3 = self.get_param(reg3, a)
+        self.memory.set_mem(val3, val)
+        log_str = self.log_str_3_args("EQ", reg1, reg2, reg3, a, b, c, val1, val2, val3, val)
+        self.logger.log(self.object, log_str)
         self.ip += 4
 
-    def opcode_7_lt(self, b, c):
+
+    def opcode_7_lt(self, a, b, c):
         (reg1, reg2, reg3) = self.memory.get_mult_mem(self.ip + 1, 3)
-        if self.get_param(reg1, c) < self.get_param(reg2, b):
-            self.memory.set_mem(reg3, 1)
+        val1 = self.get_param(reg1, c)
+        val2 = self.get_param(reg2, b)
+        val3 = self.get_param(reg3, a)
+        if val1 < val2:
+            val = 1
         else:
-            self.memory.set_mem(reg3, 0)
+            val = 0
+        self.memory.set_mem(val3, val)
+        log_str = self.log_str_3_args("LT", reg1, reg2, reg3, a, b, c, val1, val2, val3, val)
+        self.logger.log(self.object, log_str)
         self.ip += 4
 
     def opcode_6_jfalse(self, b, c):
         (reg1, reg2) = self.memory.get_mult_mem(self.ip + 1, 2)
-        if self.get_param(reg1, c) == 0:
-            self.ip = self.get_param(reg2, b)
+        val1 = self.get_param(reg1, c)
+        val2 = self.get_param(reg2, b)
+        if val1 == 0:
+            log_str = self.log_str_2_args("JF", reg1, reg2, b, c, val1, val2, "JMP")
+            self.logger.log(self.object, log_str)
         else:
+            log_str = self.log_str_2_args("JF", reg1, reg2, b, c, val1, val2, "NOP")
+            self.logger.log(self.object, log_str)
             self.ip += 3
+
 
     def opcode_5_jtrue(self, b, c):
         (reg1, reg2) = self.memory.get_mult_mem(self.ip + 1, 2)
-        if self.get_param(reg1, c) != 0:
-            self.ip = self.get_param(reg2, b)
+        val1 = self.get_param(reg1, c)
+        val2 = self.get_param(reg2, b)
+        if val1 != 0:
+            log_str = self.log_str_2_args("JT", reg1, reg2, b, c, val1, val2, "JMP")
+            self.logger.log(self.object, log_str)
         else:
+            log_str = self.log_str_2_args("JT", reg1, reg2, b, c, val1, val2, "NOP")
+            self.logger.log(self.object, log_str)
             self.ip += 3
 
     def opcode_4_output(self, c):
         reg1 = self.memory.get_mem(self.ip + 1)
         val = self.get_param(reg1, c)
         self.output_value(val)
+        log_str = self.log_str_1_args("OUT", reg1, c, "", val)
+        self.logger.log(self.object, log_str)
+
         self.ip += 2
 
-    def opcode_3_stor_input(self):
+    def opcode_3_stor_input(self, c):
         reg1 = self.memory.get_mem(self.ip + 1)
-        reg2 = self.get_input_value()
-        self.memory.set_mem(reg1, reg2)
+        val = self.get_input_value()
+        reg2 = self.get_param(reg1, c)
+        self.memory.set_mem(reg2, val)
+        log_str = self.log_str_1_args("IN", reg1, c, reg2, val)
+        self.logger.log(self.object, log_str)
         self.ip += 2
 
-    def opcode_2_mult(self, b, c):
+    def opcode_2_mult(self, a, b, c):
         (reg1, reg2, reg3) = self.memory.get_mult_mem(self.ip + 1, 3)
-        self.memory.set_mem(reg3, self.get_param(reg1, c) * self.get_param(reg2, b))
+        val1 = self.get_param(reg1, c)
+        val2 = self.get_param(reg2, b)
+        val3 = self.get_param(reg3, a)
+        val = val1 * val2
+        self.memory.set_mem(val3, val)
+        log_str = self.log_str_3_args("MULT", reg1, reg2, reg3, a, b, c, val1, val2, val3, val)
+        self.logger.log(self.object, log_str)
         self.ip += 4
 
-    def opcode_1_add(self, b, c):
+    def opcode_1_add(self, a, b, c):
         (reg1, reg2, reg3) = self.memory.get_mult_mem(self.ip + 1, 3)
-        self.memory.set_mem(reg3, self.get_param(reg1, c) + self.get_param(reg2, b))
+        val1 = self.get_param(reg1, c)
+        val2 = self.get_param(reg2, b)
+        val3 = self.get_param(reg3, a)
+        val = val1 + val2
+        self.memory.set_mem(val3, val)
+        log_str = self.log_str_3_args("ADD", reg1, reg2, reg3, a, b, c, val1, val2, val3, val)
+        self.logger.log(self.object, log_str)
         self.ip += 4
 
     def evaluate(self):
@@ -220,64 +313,16 @@ class Program:
         raise StopIteration
 
 
-def run_amplifier_stage(phase, input, program):
-    init_prog = program.copy()
-    my_prog = Program(init_prog)
-    my_prog.input = [phase, input]
-    my_prog_iter = my_prog.__iter__()
-    val = my_prog_iter.__next__()
-    my_prog_iter = None
-    return val
-
-
-def run_full_amplification(phase_list, program):
-    buf = 0
-    for phase in phase_list:
-        buf = run_amplifier_stage(phase, buf, program)
-    return buf
-
-
-def phase2_amplification(phase_list, program):
-    stage_list = []
-    for i in range(5):
-        stage = Program(program.copy())
-        stage.input.append(phase_list[i])
-        stage_list.append(stage.__iter__())
-    stage_list[0].input.append(0)
-    i = 0
-    while True:
-        try:
-            val = stage_list[i].__next__()
-            i = (i + 1) % 5
-            print("Stage: ", i, " ", val)
-            stage_list[i].input.append(val)
-        except StopIteration:
-            return val
-
-
 if __name__ == '__main__':
-    value_loader = LoadValues("inputold")
-    values = value_loader.comma_list_to_intlist()
-    int_val = [int(val) for val in values]
-    print(int_val)
-    output = run_full_amplification([0,1,2,3,4], int_val)
+    value_loader = LoadValues("input")
+    output = value_loader.comma_list_to_intlist()
+    int_val = [int(val) for val in output]
+
+    my_prog = Program(int_val)
+    my_prog.input.append(1)
+    my_prog_iter = my_prog.__iter__()
+    output = []
+    for val in my_prog_iter:
+        output.append(val)
+
     print(output)
-
-    max_output = -1
-    best_phase_list = None
-    for phase_list in itertools.permutations([0, 1, 2, 3, 4], 5):
-        output = run_full_amplification(phase_list, int_val)
-        if output > max_output:
-            max_output = output
-            best_phase_list = phase_list
-
-    print("Best : ", best_phase_list, max_output)
-
-    max_output = -1
-    best_phase_list = None
-    for phase_list in itertools.permutations([5, 6, 7, 8, 9], 5):
-        output = phase2_amplification(phase_list, int_val)
-        if output > max_output:
-            max_output = output
-            best_phase_list = phase_list
-    print("Best Phase 2: ", best_phase_list, max_output)
