@@ -128,12 +128,23 @@ class Program:
     def get_param(self, value, param_mode):
         if param_mode == 0:  # Position mode
             return self.memory.get_mem(value)
-        elif param_mode == 1:
+        elif param_mode == 1: # Immediate Mode
             return value
-        elif param_mode == 2:  # Immediate Mode
+        elif param_mode == 2: # Relative Mode
             return self.memory.get_mem(self.relative_base+value)
         else:
             raise NotImplementedError
+
+    def get_address_param(self, value, param_mode):
+        if param_mode == 0:  # Position mode
+            return value
+        elif param_mode == 1:
+            return value
+        elif param_mode == 2:  # Relative Mode
+            return self.relative_base+value
+        else:
+            raise NotImplementedError
+
 
     def __str__(self):
         result = "ip: {}[{}]-{}".format(self.ip, self.memory.get_mem(self.ip), self.memory)
@@ -211,7 +222,7 @@ class Program:
             val = 1
         else:
             val = 0
-        val3 = self.get_param(reg3, a)
+        val3 = self.get_address_param(reg3, a)
         self.memory.set_mem(val3, val)
         log_str = self.log_str_3_args("EQ", reg1, reg2, reg3, a, b, c, val1, val2, val3, val)
         self.logger.log(self.object, log_str)
@@ -222,7 +233,7 @@ class Program:
         (reg1, reg2, reg3) = self.memory.get_mult_mem(self.ip + 1, 3)
         val1 = self.get_param(reg1, c)
         val2 = self.get_param(reg2, b)
-        val3 = self.get_param(reg3, a)
+        val3 = self.get_address_param(reg3, a)
         if val1 < val2:
             val = 1
         else:
@@ -239,6 +250,7 @@ class Program:
         if val1 == 0:
             log_str = self.log_str_2_args("JF", reg1, reg2, b, c, val1, val2, "JMP")
             self.logger.log(self.object, log_str)
+            self.ip = val2
         else:
             log_str = self.log_str_2_args("JF", reg1, reg2, b, c, val1, val2, "NOP")
             self.logger.log(self.object, log_str)
@@ -252,6 +264,7 @@ class Program:
         if val1 != 0:
             log_str = self.log_str_2_args("JT", reg1, reg2, b, c, val1, val2, "JMP")
             self.logger.log(self.object, log_str)
+            self.ip = val2
         else:
             log_str = self.log_str_2_args("JT", reg1, reg2, b, c, val1, val2, "NOP")
             self.logger.log(self.object, log_str)
@@ -269,7 +282,7 @@ class Program:
     def opcode_3_stor_input(self, c):
         reg1 = self.memory.get_mem(self.ip + 1)
         val = self.get_input_value()
-        reg2 = self.get_param(reg1, c)
+        reg2 = self.get_address_param(reg1, c)
         self.memory.set_mem(reg2, val)
         log_str = self.log_str_1_args("IN", reg1, c, reg2, val)
         self.logger.log(self.object, log_str)
@@ -279,7 +292,7 @@ class Program:
         (reg1, reg2, reg3) = self.memory.get_mult_mem(self.ip + 1, 3)
         val1 = self.get_param(reg1, c)
         val2 = self.get_param(reg2, b)
-        val3 = self.get_param(reg3, a)
+        val3 = self.get_address_param(reg3, a)
         val = val1 * val2
         self.memory.set_mem(val3, val)
         log_str = self.log_str_3_args("MULT", reg1, reg2, reg3, a, b, c, val1, val2, val3, val)
@@ -290,7 +303,7 @@ class Program:
         (reg1, reg2, reg3) = self.memory.get_mult_mem(self.ip + 1, 3)
         val1 = self.get_param(reg1, c)
         val2 = self.get_param(reg2, b)
-        val3 = self.get_param(reg3, a)
+        val3 = self.get_address_param(reg3, a)
         val = val1 + val2
         self.memory.set_mem(val3, val)
         log_str = self.log_str_3_args("ADD", reg1, reg2, reg3, a, b, c, val1, val2, val3, val)
@@ -324,5 +337,13 @@ if __name__ == '__main__':
     output = []
     for val in my_prog_iter:
         output.append(val)
+    print(output)
 
+    my_prog = Program(int_val)
+    my_prog.logger.min_log_level = 2
+    my_prog.input.append(2)
+    my_prog_iter = my_prog.__iter__()
+    output = []
+    for val in my_prog_iter:
+        output.append(val)
     print(output)
