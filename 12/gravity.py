@@ -106,24 +106,22 @@ if __name__ == '__main__':
 
     my_galaxy = Galaxy(coord_list)
     print(my_galaxy)
-    state_list = {}
-    i = 0
-    #state_list[my_galaxy.energy()] = [my_galaxy]
+
+    init_galaxy = Galaxy(coord_list)
+    init_energy = init_galaxy.energy()
+    i = 1
+    my_galaxy.next_step()
     norepeat = True
     while norepeat:
         energy = my_galaxy.energy()
-        if energy in state_list:
-            for galaxy in state_list[energy]:
-                if my_galaxy == galaxy:
-                    print(my_galaxy)
-                    print(galaxy)
-                    norepeat = False
-                    print("Finished, repeat at :", i)
-                    break
-                state_list[energy].append(my_galaxy)
-        else:
-            state_list[energy] = [my_galaxy]
-        print("Step : ", i, " energy:", energy)
+        if energy == init_energy:
+            if my_galaxy == init_galaxy:
+                print(my_galaxy)
+                norepeat = False
+                print("Finished, repeat at :", i)
+                break
+        if not (i%1000):
+            print("Step : ", i, " energy:", energy)
         my_galaxy.next_step()
         i += 1
 
