@@ -1,4 +1,5 @@
 from LoadValues import LoadValues
+import cProfile, pstats
 
 class Moon:
     coords = None
@@ -28,6 +29,12 @@ class Moon:
             return -1
         else:
             return 0
+
+    def __deepcopy__(self, memodict={}):
+        new_moon = Moon()
+        new_moon.coords = self.coords
+        new_moon.velocity = self.velocity
+        return new_moon
 
     def update_velocity(self, other):
         (x, y, z) = self.coords
@@ -91,15 +98,76 @@ class Galaxy:
                 return False
         return True
 
+    def __deepcopy__(self, memodict={}):
+        new_galaxy = Galaxy([])
+        new_galaxy.moon_list = []
+        for moon in self.moon_list:
+            new_galaxy.moon_list.append(moon.__deepcopy__())
+        return new_galaxy
+
+    def find_cycle_len(self):
+        my_galaxy = self.__deepcopy__()
+        init_galaxy = self.__deepcopy__()
+        init_energy= init_galaxy.energy()
+        i = 1
+        my_galaxy.next_step()
+        norepeat = True
+        while norepeat:
+            energy = my_galaxy.energy()
+            if energy == init_energy:
+                if my_galaxy == init_galaxy:
+                    print(my_galaxy)
+                    norepeat = False
+                    break
+            if not (i % 10000):
+                print("Step : ", i, " energy:", energy)
+            my_galaxy.next_step()
+            i += 1
+        return i
+
+    def find_single_dim_cycle(self):
+        my_galaxyx = self.__deepcopy__()
+        my_galaxyy = self.__deepcopy__()
+        my_galaxyz = self.__deepcopy__()
+
+        for (i, moon) in enumerate(self.moon_list):
+            (x, y, z) = moon.coords
+            (dx, dy, dz) = moon.velocity
+            my_galaxyx.moon_list[i].coords = (x, 0, 0)
+            my_galaxyy.moon_list[i].coords = (0, y, 0)
+            my_galaxyz.moon_list[i].coords = (0, 0, z)
+            my_galaxyx.moon_list[i].velocity = (dx, 0, 0)
+            my_galaxyx.moon_list[i].velocity = (dy, 0, 0)
+            my_galaxyx.moon_list[i].velocity = (dz, 0, 0)
+
+        cycle_x = my_galaxyx.find_cycle_len()
+        cycle_y = my_galaxyy.find_cycle_len()
+        cycle_z = my_galaxyz.find_cycle_len()
+        print(cycle_x, cycle_y, cycle_z)
+        return lcm(lcm(cycle_x, cycle_y), cycle_z)
+
+
+def gcd(a, b):
+    """Compute the greatest common divisor of a and b"""
+    while b > 0:
+        a, b = b, a % b
+    return a
+
+
+def lcm(a, b):
+    """Compute the lowest common multiple of a and b"""
+    return a * b // gcd(a, b)
 
 
 if __name__ == '__main__':
-    value_loader = LoadValues("input2")
+    pr = cProfile.Profile()
+
+    value_loader = LoadValues("input")
     coord_list = value_loader.get_3d_coords()
     print(coord_list)
     my_galaxy = Galaxy(coord_list)
 
-    for i in range(1001):
+    for i in range(101):
         print("After step #", i)
         print(my_galaxy)
         my_galaxy.next_step()
@@ -107,23 +175,13 @@ if __name__ == '__main__':
     my_galaxy = Galaxy(coord_list)
     print(my_galaxy)
 
-    init_galaxy = Galaxy(coord_list)
-    init_energy = init_galaxy.energy()
-    i = 1
-    my_galaxy.next_step()
-    norepeat = True
-    while norepeat:
-        energy = my_galaxy.energy()
-        if energy == init_energy:
-            if my_galaxy == init_galaxy:
-                print(my_galaxy)
-                norepeat = False
-                print("Finished, repeat at :", i)
-                break
-        if not (i%1000):
-            print("Step : ", i, " energy:", energy)
-        my_galaxy.next_step()
-        i += 1
 
+    pr.enable()
+
+    init_galaxy = Galaxy(coord_list)
+    #print(init_galaxy.find_cycle_len())
+    print(init_galaxy.find_single_dim_cycle())
+    pr.disable()
+    #pr.print_stats()
 
 
