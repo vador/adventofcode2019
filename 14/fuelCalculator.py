@@ -1,39 +1,78 @@
+from queue import Queue
+
 from loadValues import LoadValues
 import math
 
 class FuelCalculator:
-    reactions = {}
-    ore_cost = {}
+    reactions = None
+    orders = None
+    ore_needed = 0
+    leftovers = None
 
     def __init__(self, reactions):
         self.reactions = reactions
-        self.ore_cost["ORE"] = (1, 1)
+        self.orders = Queue()
+        self.leftovers = {}
 
-    def calculate_elem_cost(self, elem):
-        if elem in self.ore_cost:
-            return self.ore_cost[elem]
+    def consume_order(self):
+        (order, qty) = self.orders.get()
+        if order == "ORE":
+            self.ore_needed += qty
         else:
-            ((res, qty), compounds) = self.reactions[elem]
-            tmp_cost = 0
-            for (compound, q) in compounds:
-                (cost, units) = self.calculate_elem_cost(compound)
-                tmp_cost += cost * math.ceil(q / units)
-            self.ore_cost[elem] = (tmp_cost, qty)
-            return self.ore_cost[elem]
+            if order in self.leftovers:
+                left = self.leftovers[order]
+            else:
+                left = 0
+            if left > qty:
+                self.leftovers[order] = left - qty
+            else:
+                needed = qty - left
+                ((compound, q_recipe), ingredients) = self.reactions[order]
+                mult = math.ceil(needed / q_recipe)
+                for (ingredient, ing_qty) in ingredients:
+                    self.orders.put((ingredient, ing_qty * mult))
+                left = mult * q_recipe - needed
+                self.leftovers[compound] = left
 
+    def make_fuel(self, qty=1):
+        self.orders = Queue()
+        self.leftovers = {}
+        self.ore_needed = 0
+        self.orders.put(("FUEL", qty))
+        while not self.orders.empty():
+            self.consume_order()
+        return self.ore_needed
 
-    def calculate_ORE_cost(self):
-        elem_list = self.reactions.keys()
-        for elem in elem_list:
-            self.calculate_elem_cost(elem)
+    def how_many_for_ore(self, qty, max):
+        min = 0
+        while (max-min) > 1:
+            tmp = math.floor((max+min)/2)
+            print(min, max, tmp)
 
+            tmp_qty = self.make_fuel(tmp)
+            if tmp_qty <= qty:
+                min = tmp
+            else:
+                max = tmp
+        return min
 
 if __name__ == '__main__':
-    lv = LoadValues("input1")
+    lv = LoadValues("input")
 
     reactions = lv.get_reactions()
     print(reactions)
     my_fc = FuelCalculator(reactions)
-    my_fc.calculate_ORE_cost()
-    print(my_fc.ore_cost)
-    print(my_fc.ore_cost["FUEL"])
+    qty = my_fc.make_fuel(1)
+    print(qty)
+    qty = my_fc.make_fuel(10)
+    print(qty)
+    qty = my_fc.make_fuel(1)
+    print(qty)
+
+
+    max = 1000000000000
+
+    val = my_fc.how_many_for_ore(1000000000000, max)
+    print(val, my_fc.make_fuel(val))
+    print(val, my_fc.make_fuel(val+1))
+
