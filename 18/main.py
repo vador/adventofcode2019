@@ -21,10 +21,6 @@ print(my_graph.entrance)
 #print(my_graph.find_reachable_keys((1,3), ['a','b', 'c', 'd', 'e']))
 pr = cProfile.Profile()
 pr.enable()
-print(my_graph.build_path_from_key('a'))
-all_path = {}
-#for cur_key in my_graph.key_pos.keys():
-print(my_graph.find_best_path('@', [], 0))
-
+print(my_graph.find_best_path_from_entrance())
 pr.disable()
 #pr.print_stats()

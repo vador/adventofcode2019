@@ -116,64 +116,57 @@ class Graph:
                 return False
         return True
 
-    def find_best_path(self, start_key, keys_obtained, partial_dist=0, shortest_path=sys.maxsize, best_path=[]):
-        print("Entering : ", start_key, keys_obtained, partial_dist, len(keys_obtained), len(self.key_pos), shortest_path)
-        if len(keys_obtained)+1 == len(self.key_pos):
-            print(">>>>End of path :", partial_dist, keys_obtained)
-            if partial_dist < shortest_path:
-                shortest_path = partial_dist
-                best_path = keys_obtained
-            return (0, [], shortest_path, best_path)
-        (reachable_keys, following_keys) = self.find_reachable_keys(start_key, keys_obtained)
-        if partial_dist > shortest_path:
-            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><Pruning :", keys_obtained, partial_dist)
-        print("Reachable :", reachable_keys)
-        shortest_remaining_path = sys.maxsize
-        best_full_path = best_path
-        best_remaining_keys = []
-        for (next_key, move) in reachable_keys:
-            (key_dist, key_path, key_shortest_path, key_full_path) = self.find_best_path(next_key, keys_obtained + [next_key],
-                                                                          partial_dist + move,
-                                                                          shortest_path)
-            if key_dist < shortest_remaining_path:
-                shortest_remaining_path = move + key_dist
-                best_remaining_keys = [next_key] + key_path
-            if key_shortest_path < shortest_path:
-                shortest_path = key_shortest_path
-                best_full_path = key_full_path
-        return (shortest_remaining_path, best_remaining_keys, shortest_path, best_full_path)
+    def get_neighbours(self, pos):
+        (x, y) = pos
+        res = []
+        neighbour_cells = [(-1, 0), (0, 1), (1, 0), (0, -1)]
+        for (dx, dy) in neighbour_cells:
+            res.append(((x+dx, y+dy), self.maze[y+dy][x+dx]))
+        return res
 
-    def find_best_path_old(self, start_key, keys_obtained, partial_dist=0, best_found_distance=sys.maxsize):
-        print("Entering : ", start_key, keys_obtained, partial_dist, len(keys_obtained), len(self.key_pos))
-        if len(keys_obtained)+1 == len(self.key_pos):
-            print(">>>>End of path path :", partial_dist, keys_obtained)
-            return (0, [])
+    def is_reachable_cell(self, cell_value, keys_obtained):
+        if cell_value == ".":
+            return True
+        if cell_value == "@":
+            return True
+        if is_key(cell_value):
+            return True
+        if is_door(cell_value) and cell_value.lower() in keys_obtained:
+            return True
+        return False
 
-        (reachable_keys, following_keys) = self.find_reachable_keys(start_key, keys_obtained)
-        print("Reachable :", reachable_keys)
-        best_path = sys.maxsize #2 *sum([move for (key,move) in following_keys])
-        #if (partial_dist+ best_remaining_dist > best_found_distance):
-        #    print('<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
-        #    print("Pruning too long", best_found_distance, partial_dist + best_remaining_dist, keys_obtained)
-        #    return (sys.maxsize, [])
+    def find_best_path_from_entrance(self):
+        all_key = frozenset([key for key in self.key_pos.keys()^{'@'}])
 
-        best_keys = []
-        for (next_key,move) in reachable_keys:
-            #print(" new :")
-            #move = reachable_keys[next_key]
-            (best_remaining_dist, following_keys) = self.find_best_path_old(next_key,
-                                                                            keys_obtained + [next_key],
-                                                                            partial_dist + move,
-                                                                            best_found_distance)
-            #print("Best partial : ", cur_dist+move, " best remain : ", best_remaining_dist)
-            if partial_dist + move + best_remaining_dist < best_found_distance:
-                best_path = best_remaining_dist
-                best_found_distance = partial_dist + move + best_remaining_dist
-                print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-                best_keys = [next_key] + following_keys
-                print("Found ", best_path, best_keys)
+        visited = {}
+        to_visit = Queue()
+        keys_obtained = frozenset()
+        to_visit.put((0, self.entrance, keys_obtained))
+        while not to_visit.empty():
+            (cur_dist, cur_pos, keys_obtained) = to_visit.get()
+            cur_dist +=1
+            for (neighbour, cell_value) in self.get_neighbours(cur_pos):
+                if self.is_reachable_cell(cell_value, keys_obtained):
+                    if is_key(cell_value):
+                        keys_obtained_new = keys_obtained | {cell_value}
+                        if (neighbour, keys_obtained_new) not in visited:
+                            visited[(neighbour, keys_obtained_new)] = cur_dist
+                            to_visit.put((cur_dist, neighbour, keys_obtained_new))
+                    else:
+                        if (neighbour, keys_obtained) not in visited:
+                            visited[(neighbour, keys_obtained)] = cur_dist
+                            to_visit.put((cur_dist, neighbour, keys_obtained))
+        best_dist = 65535
+        print(visited)
+        for candidate in all_key:
+            cur_dist = visited[(self.key_pos[candidate], all_key)]
+            if cur_dist < best_dist:
+                best_dist = cur_dist
+        return best_dist
 
-        return (best_path, best_keys)
+
+
+        return start_pos
 
 if __name__ == '__main__':
     print()
