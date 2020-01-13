@@ -28,7 +28,7 @@ if __name__ == '__main__':
 
 #    map = get_map(my_prog)
 #    my_sm.scaffoldMap = map
-    lv = LoadValues("input2")
+    lv = LoadValues("input1")
     my_sm.scaffoldMap = lv.strip_lines()
 
     intersects = my_sm.get_intersections()
